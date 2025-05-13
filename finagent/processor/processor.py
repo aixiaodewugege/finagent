@@ -43,19 +43,6 @@ def cal_news(df):
     df["source"] = df["source"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
     return df
 
-def cal_guidance(df):
-    df["title"] = df["title"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
-    df["text"] = df["text"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
-    return df
-
-def cal_sentiment(df, columns):
-    for col in columns:
-        if "sentiment" not in col:
-            df[col] = df.groupby("timestamp")[col].transform("sum")
-        else:
-            df[col] = df.groupby("timestamp")[col].transform("mean")
-            df[col] = df[col].fillna(0.5)
-    return df
 
 
 def cal_factor(df, level="day"):
@@ -256,39 +243,47 @@ class Processor():
 
             price_path = os.path.join(self.root, price_path, "{}.csv".format(stock))
 
-            if price_type == "fmp":
-                price_column_map = {
-                    "open": "open",
-                    "high": "high",
-                    "low": "low",
-                    "close": "close",
-                    "volume": "volume",
-                    "adjClose": "adj_close",
-                }
-            elif price_type == "yahoofinance":
-                price_column_map = {
-                    "Open": "open",
-                    "High": "high",
-                    "Low": "low",
-                    "Close": "close",
-                    "Volume": "volume",
-                    "Date": "timestamp",
-                    "Adj Close": "adj_close",
-                }
-            else:
-                price_column_map = {
-                    "open": "open",
-                    "high": "high",
-                    "low": "low",
-                    "close": "close",
-                    "volume": "volume",
-                    "adjClose": "adj_close",
-                }
+            # Define column mappings based on price_type
+
+            price_column_map = {
+                "time": "timestamp",
+                "开盘价": "open",
+                "最高价": "high",
+                "最低价": "low",
+                "收盘价": "close",
+                "成交量": "volume",
+                "昨日收盘价": "last_close",  # Using 昨日收盘价 as adj_close for now
+            }
+            # Additional columns to keep from Chinese format
+            additional_columns = [
+                "市盈率", "市盈率ttm", "市现率ttm", "市净率", "市销率", "市销率ttm"
+            ]
+            price_columns_extended = price_columns + additional_columns
+
+            
 
             assert os.path.exists(price_path), "Price path {} does not exist".format(price_path)
             price_df = pd.read_csv(price_path)
+            
 
-            price_df = price_df.rename(columns=price_column_map)[["timestamp"] + price_columns]
+            # Check if thscode column exists and use it to filter the stock if needed
+            if "thscode" in price_df.columns:
+                if stock in price_df["thscode"].values:
+                    price_df = price_df[price_df["thscode"] == stock]
+            
+            # Select and rename columns
+            columns_to_select = ["time"] + [col for col in price_df.columns if col in price_column_map.keys() or col in additional_columns]
+            price_df = price_df[columns_to_select]
+            
+            # Rename columns according to mapping
+            rename_dict = {k: v for k, v in price_column_map.items() if k in price_df.columns}
+            price_df = price_df.rename(columns=rename_dict)
+            
+            # Ensure all required columns exist
+            for col in price_columns:
+                if col not in price_df.columns:
+                    price_df[col] = 0  # Default value for missing columns
+
 
             price_df["timestamp"] = pd.to_datetime(price_df["timestamp"])
             price_df = price_df[(price_df["timestamp"] >= start_date) & (price_df["timestamp"] < end_date)]
@@ -301,84 +296,20 @@ class Processor():
             os.makedirs(outpath, exist_ok=True)
             price_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
 
-            features_df = cal_factor(deepcopy(price_df), level=self.interval)
+            # For features calculation, use only the standard price columns
+            features_df = cal_factor(deepcopy(price_df[["timestamp"] + price_columns]), level=self.interval)
             features_df = cal_target(features_df)
+            
+            # Add back any additional columns from the Chinese format
+            if price_type == "chinese" and set(additional_columns).issubset(price_df.columns):
+                for col in additional_columns:
+                    if col in price_df.columns:
+                        features_df[col] = price_df[col].values
+            
             outpath = os.path.join(self.root, self.workdir, self.tag, "features")
             os.makedirs(outpath, exist_ok=True)
             features_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
 
-    def _process_guidance(self,
-                          stocks = None,
-                          start_date = None,
-                          end_date = None):
-        start_date = datetime.strptime(start_date if start_date else self.start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date if end_date else self.end_date, "%Y-%m-%d")
-
-        stocks = stocks if stocks else self.stocks
-
-        guidance_columns = [
-            "title",
-            "text",
-            "sentiment",
-            "url",
-        ]
-        
-        for stock in tqdm(stocks):
-
-            guidances = self.path_params["guidance"]
-            guidances_df = []
-
-            for guidance in guidances:
-                guidance_type = guidance["type"]
-                guidance_path = guidance["path"]
-
-                guidance_path = os.path.join(self.root, guidance_path, "{}.csv".format(stock))
-
-                if guidance_type == "rapidapi_seekingalpha":
-                    guidance_column_map = {
-                        "title": "title",
-                        "summary": "text",
-                        "sentiment": "sentiment",
-                        "url": "url",
-                    }
-
-                assert os.path.exists(guidance_path), "guidance path {} does not exist".format(guidance_path)
-
-                guidance_df = pd.read_csv(guidance_path)
-                guidance_df = guidance_df.rename(columns=guidance_column_map)[["timestamp"] + guidance_columns]
-                guidance_df["timestamp"] = pd.to_datetime(guidance_df["timestamp"])
-
-                guidance_df = guidance_df[(guidance_df["timestamp"] >= start_date) & (guidance_df["timestamp"] < end_date)]
-                guidance_df = guidance_df.sort_values(by="timestamp")
-                guidance_df = guidance_df.drop_duplicates(subset=["timestamp", "title", "text"], keep="first")
-
-                if guidance_type == "rapidapi_seekingalpha":
-                    guidance_df["type"] = "rapidapi"
-                    guidance_df["source"] = "seekingalpha"
-
-                guidance_df = guidance_df.reset_index(drop=True)
-                guidance_df = cal_guidance(guidance_df)
-                guidance_df["timestamp"] = pd.to_datetime(guidance_df["timestamp"]).apply(lambda x: x.strftime("%Y-%m-%d"))
-                guidances_df.append(guidance_df)
-
-            guidances_df = pd.concat(guidances_df)
-
-            if self.if_parse_url:
-                urls = guidances_df["url"].values
-                max_process = 10
-                pool = multiprocessing.Pool(processes=max_process)
-                contents = pool.map(langchain_parse_url, urls)
-                pool.close()
-                pool.join()
-                guidances_df["content"] = contents
-
-            guidances_df = guidances_df.sort_values(by="timestamp")
-            guidances_df = guidances_df.reset_index(drop=True)
-            guidances_df = guidances_df[["timestamp", "type", "sentiment", "title", "text", "url"]]
-
-            outpath = os.path.join(self.root, self.workdir, self.tag, "guidance")
-            os.makedirs(outpath, exist_ok=True)
-            guidances_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
 
     def _process_news(self,
                 stocks = None,
@@ -398,7 +329,6 @@ class Processor():
         ]
 
         for stock in tqdm(stocks):
-
             newses = self.path_params["news"]
             newses_df = []
 
@@ -407,205 +337,93 @@ class Processor():
                 news_path = news["path"]
 
                 news_path = os.path.join(self.root, news_path, "{}.csv".format(stock))
+                news_column_map = {
+                    "time": "timestamp",
+                    "新闻": "text",
+                }
+                # For Chinese format, we might not have all columns
+                # Set defaults for missing columns
+                default_values = {
+                    "title": "",
+                    "source": "chinese_source",
+                    "url": ""
+                }
 
-                if news_type == "fmp":
-                    news_column_map = {
-                        "title": "title",
-                        "text": "text",
-                        "site": "source",
-                        "url": "url",
-                    }
-                elif news_type == "yahoofinance":
-                    news_column_map = {
-                        "headline": "title",
-                        "summary": "text",
-                        "datetime": "timestamp",
-                        "source": "source",
-                        "url": "url",
-                    }
-                else:
-                    news_column_map = {
-                        "title": "title",
-                        "text": "text",
-                        "site": "source",
-                        "url": "url",
-                    }
 
-                assert os.path.exists(news_path), "News path {} does not exist".format(news_path)
+                # Check if the file exists, if not, continue to the next news source
+                if not os.path.exists(news_path):
+                    print(f"News path {news_path} does not exist, skipping...")
+                    continue
 
                 news_df = pd.read_csv(news_path)
-                news_df = news_df.rename(columns=news_column_map)[["timestamp"] + news_columns]
-                news_df["timestamp"] = pd.to_datetime(news_df["timestamp"])
+                
 
+                if "thscode" in news_df.columns:
+                    if stock in news_df["thscode"].values:
+                        news_df = news_df[news_df["thscode"] == stock]
+                
+                # Select and rename columns
+                columns_to_select = [col for col in news_df.columns if col in news_column_map.keys()]
+                if len(columns_to_select) == 0:
+                    print(f"No matching columns found in {news_path}, skipping...")
+                    continue
+                    
+                news_df = news_df[columns_to_select]
+                news_df = news_df.rename(columns=news_column_map)
+                
+                # Add default values for missing columns
+                for col, default_val in default_values.items():
+                    if col not in news_df.columns:
+                        news_df[col] = default_val
+
+
+                news_df["timestamp"] = pd.to_datetime(news_df["timestamp"])
                 news_df = news_df[(news_df["timestamp"] >= start_date) & (news_df["timestamp"] < end_date)]
                 news_df = news_df.sort_values(by="timestamp")
-                news_df = news_df.drop_duplicates(subset=["timestamp", "title", "text"], keep="first")
+                
+                # Only attempt to drop duplicates if we have the necessary columns
+                if all(col in news_df.columns for col in ["timestamp", "title", "text"]):
+                    news_df = news_df.drop_duplicates(subset=["timestamp", "title", "text"], keep="first")
+                else:
+                    news_df = news_df.drop_duplicates(subset=["timestamp"], keep="first")
 
-                if news_type == "fmp":
-                    news_df["type"] = "fmp"
-                elif news_type == "yahoofinance":
-                    news_df["type"] = "yahoofinance"
+                news_df["type"] = "chinese"
 
                 news_df = news_df.reset_index(drop=True)
                 news_df = cal_news(news_df)
                 news_df["timestamp"] = pd.to_datetime(news_df["timestamp"]).apply(lambda x: x.strftime("%Y-%m-%d"))
                 newses_df.append(news_df)
 
-            newses_df = pd.concat(newses_df)
+            # Only proceed if we have news data
+            if len(newses_df) > 0:
+                newses_df = pd.concat(newses_df)
 
-            if self.if_parse_url:
-                urls = newses_df["url"].values
-                max_process = 10
-                pool = multiprocessing.Pool(processes=max_process)
-                contents = pool.map(langchain_parse_url, urls)
-                pool.close()
-                pool.join()
-                newses_df["content"] = contents
+                if self.if_parse_url and "url" in newses_df.columns and not newses_df["url"].isnull().all():
+                    urls = newses_df["url"].values
+                    max_process = 10
+                    pool = multiprocessing.Pool(processes=max_process)
+                    contents = pool.map(langchain_parse_url, urls)
+                    pool.close()
+                    pool.join()
+                    newses_df["content"] = contents
 
-            newses_df = newses_df.sort_values(by="timestamp")
-            newses_df = newses_df.drop_duplicates(subset=["timestamp", "title"], keep="first")
-            newses_df = newses_df.reset_index(drop=True)
-            newses_df = newses_df[["timestamp", "type", "source", "title", "text", "url"]]
+                newses_df = newses_df.sort_values(by="timestamp")
+                newses_df = newses_df.drop_duplicates(subset=["timestamp", "title"], keep="first")
+                newses_df = newses_df.reset_index(drop=True)
+                
+                # Ensure all required columns exist
+                for col in ["timestamp", "type", "source", "title", "text", "url"]:
+                    if col not in newses_df.columns:
+                        newses_df[col] = ""
+                    
+                newses_df = newses_df[["timestamp", "type", "source", "title", "text", "url"]]
 
-            outpath = os.path.join(self.root, self.workdir, self.tag, "news")
-            os.makedirs(outpath, exist_ok=True)
-            newses_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
-
-    def _process_sentiment(self,
-                           stocks = None,
-                           start_date = None,
-                           end_date = None):
-        """
-        stocktwits_posts,twitter_posts,
-        stocktwits_comments,twitter_comments,
-        stocktwits_likes,twitter_likes,
-        stocktwits_impressions,twitter_impressions,
-        stocktwits_sentiment,twitter_sentiment
-        """
-
-        start_date = datetime.strptime(start_date if start_date else self.start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date if end_date else self.end_date, "%Y-%m-%d")
-
-        stocks = stocks if stocks else self.stocks
-
-        sentiment_columns = [
-            "stocktwits_posts",
-            "stocktwits_comments",
-            "stocktwits_likes",
-            "stocktwits_impressions",
-            "stocktwits_sentiment",
-        ]
-
-        for stock in tqdm(stocks):
-
-            sentiments = self.path_params["sentiment"]
-            sentiments_df = []
-
-            for sentiment in sentiments:
-                sentiment_type = sentiment["type"]
-                sentiment_path = sentiment["path"]
-
-                sentiment_path = os.path.join(self.root, sentiment_path, "{}.csv".format(stock))
-
-                if sentiment_type == "fmp":
-                    sentiment_column_map = {}
-
-                assert os.path.exists(sentiment_path), "sentiment path {} does not exist".format(sentiment_path)
-
-                sentiment_df = pd.read_csv(sentiment_path)
-                sentiment_df = sentiment_df.rename(columns=sentiment_column_map)[["timestamp"] + sentiment_columns]
-                sentiment_df["timestamp"] = pd.to_datetime(sentiment_df["timestamp"])
-
-                sentiment_df = sentiment_df[ (sentiment_df["timestamp"] >= start_date) & (sentiment_df["timestamp"] < end_date)]
-                sentiment_df = sentiment_df.sort_values(by="timestamp")
-                sentiment_df["timestamp"] = pd.to_datetime(sentiment_df["timestamp"]).apply(lambda x: x.strftime("%Y-%m-%d"))
-
-                if sentiment_type == "rapidapi_seekingalpha":
-                    sentiment_df["type"] = "rapidapi"
-                    sentiment_df["source"] = "seekingalpha"
-
-                sentiment_df = cal_sentiment(sentiment_df, sentiment_columns)
-                sentiment_df = sentiment_df.drop_duplicates(subset=["timestamp"], keep="first")
-                sentiment_df = sentiment_df.reset_index(drop=True)
-                sentiment_df["timestamp"] = pd.to_datetime(sentiment_df["timestamp"]).apply(lambda x: x.strftime("%Y-%m-%d"))
-                sentiments_df.append(sentiment_df)
-
-            sentiments_df = pd.concat(sentiments_df)
-
-            if self.if_parse_url:
-                urls = sentiments_df["url"].values
-                max_process = 10
-                pool = multiprocessing.Pool(processes=max_process)
-                contents = pool.map(langchain_parse_url, urls)
-                pool.close()
-                pool.join()
-                sentiments_df["content"] = contents
-
-            sentiments_df["type"] = "sentiment"
-
-            sentiments_df = sentiments_df.sort_values(by="timestamp")
-            sentiments_df = sentiments_df.reset_index(drop=True)
-            sentiments_df = sentiments_df[["timestamp", "type"] + sentiment_columns]
-
-            outpath = os.path.join(self.root, self.workdir, self.tag, "sentiment")
-            os.makedirs(outpath, exist_ok=True)
-            sentiments_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
-
-    def _process_economic(self,
-                          stocks = None,
-                          start_date = None,
-                          end_date = None):
-
-        start_date = datetime.strptime(start_date if start_date else self.start_date, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date if end_date else self.end_date, "%Y-%m-%d")
-
-        """
-        GDP, realGDP, nominalPotentialGDP, realGDPPerCapita, federalFunds, CPI, inflationRate, inflation, retailSales, consumerSentiment, durableGoods, unemploymentRate, totalNonfarmPayroll, initialClaims, industrialProductionTotalIndex, newPrivatelyOwnedHousingUnitsStartedTotalUnits, totalVehicleSales, retailMoneyFunds, smoothedUSRecessionProbabilities, 3MonthOr90DayRatesAndYieldsCertificatesOfDeposit, commercialBankInterestRateOnCreditCardPlansAllAccounts, 30YearFixedRateMortgageAverage, 15YearFixedRateMortgageAverage
-        """
-
-        indicators = [
-            "GDP",
-            "federalFunds",
-            "CPI",
-            "inflationRate",
-            "unemploymentRate",
-        ]
-
-        type = self.path_params["economic"][0]["type"]
-        path = self.path_params["economic"][0]["path"]
-
-        df = None
-
-        for indicator in indicators:
-
-            indicator_path = os.path.join(self.root, path, "{}.csv".format(indicator))
-            assert os.path.exists(indicator_path), "indicator path {} does not exist".format(indicator_path)
-
-            indicator_df = pd.read_csv(indicator_path)
-
-            indicator_df = indicator_df.rename(columns={
-                "GDP": "gdp",
-                "federalFunds": "federal_funds",
-                "CPI": "cpi",
-                "inflationRate": "inflation_rate",
-                "unemploymentRate": "unemployment_rate",
-            })
-
-            indicator_df["timestamp"] = pd.to_datetime(indicator_df["timestamp"])
-            indicator_df = indicator_df[(indicator_df["timestamp"] >= start_date) & (indicator_df["timestamp"] < end_date)]
-            indicator_df = indicator_df.sort_values(by="timestamp")
-
-            if df is None:
-                df = indicator_df
+                outpath = os.path.join(self.root, self.workdir, self.tag, "news")
+                os.makedirs(outpath, exist_ok=True)
+                newses_df.to_parquet(os.path.join(outpath, "{}.parquet".format(stock)), index=False)
             else:
-                df = pd.merge(df, indicator_df, on="timestamp", how="left")
+                print(f"No news data found for {stock}, skipping...")
 
-            df = df.fillna(method="ffill")
-            df = df.fillna(method="bfill")
-            df = df.reset_index(drop=True)
-            df["type"] = "economic"
-
-        df.to_parquet(os.path.join(self.root, self.workdir, self.tag, "economic.parquet"), index=False)
 
     def process(self,
                 stocks = None,
@@ -616,21 +434,6 @@ class Processor():
         self._process_price_and_features(stocks=stocks, start_date=start_date, end_date=end_date)
         print("<" * 30 + "Finish price and features..." + "<" * 30)
 
-        if "guidance" in self.path_params:
-            print(">" * 30 + "Running guidance..." + ">" * 30)
-            self._process_guidance(stocks=stocks, start_date=start_date, end_date=end_date)
-            print("<" * 30 + "Finish guidance..." + "<" * 30)
-
-        if "sentiment" in self.path_params:
-            print(">" * 30 + "Running sentiment..." + ">" * 30)
-            self._process_sentiment(stocks=stocks, start_date=start_date, end_date=end_date)
-            print("<" * 30 + "Finish sentiment..." + "<" * 30)
-
         print(">" * 30 + "Running news..." + ">" * 30)
         self._process_news(stocks=stocks, start_date=start_date, end_date=end_date)
         print("<" * 30 + "Finish news..." + "<" * 30)
-
-        if "economic" in self.path_params:
-            print(">" * 30 + "Running economic..." + ">" * 30)
-            self._process_economic(stocks=stocks, start_date=start_date, end_date=end_date)
-            print("<" * 30 + "Finish economic..." + "<" * 30)
