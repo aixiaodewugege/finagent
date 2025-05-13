@@ -1,0 +1,6 @@
+{
+	"key_var" : "OA_OPENAI_KEY",
+	"emb_model": "text-embedding",
+	"comp_model": "chatgpt-4o-latest-2025-03-27", 
+	"is_azure": false
+}
