@@ -51,9 +51,9 @@ class Dataset(BaseDataset):
         self.assets = self._init_assets()
         self.prices = self._load_prices()
         self.news = self._load_news()
-        self.guidances = self._load_guidances()
-        self.sentiments = self._load_sentiments()
-        self.economics = self._load_economics()
+        # self.guidances = self._load_guidances()
+        # self.sentiments = self._load_sentiments()
+        # self.economics = self._load_economics()
 
     def _init_assets(self):
         with open(self.assets_path) as op:
@@ -75,7 +75,8 @@ class Dataset(BaseDataset):
             df = df.sort_values(by="timestamp")
             df = df.reset_index(drop=True)
 
-            df = df[["timestamp", "open", "high", "low", "close", "adj_close", "volume"]]
+            df = df[["timestamp", "open", "high", "low", "close", "last_close", "volume",'PE_ratio', 'PE_ratio_ttm', 'PCF_ratio_ttm', 'PB_ratio', 'PS_ratio',
+       'PS_ratio_ttm']]
 
             prices[asset] = df
 
@@ -95,7 +96,6 @@ class Dataset(BaseDataset):
             df["timestamp"] = df["timestamp"].apply(lambda x: x.strftime("%Y-%m-%d"))
             df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-            df = df.dropna(axis=0, how="any")
             df = df.sort_values(by="timestamp")
             df = df.reset_index(drop=True)
 
@@ -103,7 +103,7 @@ class Dataset(BaseDataset):
             df["id"] = df["id"].apply(lambda x: "{:06d}".format(x))
             global_id += len(df)
 
-            df = df[["timestamp", "id", "type", "source", "title", "text"]]
+            df = df[["timestamp", "id", "type", "title", "text"]]
 
             news[asset] = df
 

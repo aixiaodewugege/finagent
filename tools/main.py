@@ -28,7 +28,7 @@ from finagent.tools import StrategyAgents
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Main')
-    parser.add_argument("--config", default=os.path.join(ROOT, "configs", "exp", "trading", "ETHUSD.py"), help="config file path")
+    parser.add_argument("--config", default=os.path.join(ROOT, "configs", "exp", "trading", "AAPL.py"), help="config file path")
     parser.add_argument(
         '--cfg-options',
         nargs='+',
@@ -48,8 +48,8 @@ def parse_args():
     parser.add_argument("--memory_path", type=str, default=None)
     parser.add_argument("--if_load_trading_record", action="store_true", default=True)
     parser.add_argument("--trading_record_path", type=str, default=None)
-    parser.add_argument("--if_train", action="store_true", default=False)
-    parser.add_argument("--if_valid", action="store_true", default=True)
+    parser.add_argument("--if_train", action="store_true", default=True)
+    parser.add_argument("--if_valid", action="store_true", default=False)
 
     # valid
     # parser.add_argument("--if_load_memory", action="store_true", default=True)

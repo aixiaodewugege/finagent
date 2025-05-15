@@ -18,7 +18,7 @@ from finagent.utils.misc import update_data_root
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Download Prices")
-    parser.add_argument("--config", default=os.path.join(ROOT, "configs", "processor", "processor_day_exp_cryptos.py"), help="download datasets config file path")
+    parser.add_argument("--config", default=os.path.join(ROOT, "configs", "processor", "processor_day_exp_stocks.py"), help="download datasets config file path")
     parser.add_argument(
         '--cfg-options',
         nargs='+',
@@ -77,7 +77,7 @@ def main():
 
     processor = PROCESSOR.build(cfg.processor)
     stocks = processor.stocks
-
+    
     batch_size = cfg.batch_size if cfg.batch_size < len(stocks) else 5
     batch_size = min(len(stocks), batch_size)
 

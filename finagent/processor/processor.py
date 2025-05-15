@@ -6,9 +6,13 @@ import os
 import pandas as pd
 import numpy as np
 from tqdm.auto import tqdm
-from langchain_community.document_loaders import PlaywrightURLLoader
+# from langchain_community.document_loaders import PlaywrightURLLoader
 import backoff
 import time
+import json
+from bs4 import BeautifulSoup   # pip install beautifulsoup4
+import pandas as pd
+import ast
 
 @backoff.on_exception(backoff.expo,(Exception,), max_tries=3, max_value=10, jitter=None)
 def langchain_parse_url(url):
@@ -40,7 +44,6 @@ def my_rank(x):
 def cal_news(df):
     df["title"] = df["title"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
     df["text"] = df["text"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
-    df["source"] = df["source"].fillna("").str.replace("\n", " ").replace("\r", " ").replace("\t", " ")
     return df
 
 
@@ -233,7 +236,9 @@ class Processor():
             "low",
             "close",
             "volume",
-            "adj_close"
+            "last_close",
+            #"市盈率", "市盈率ttm", "市现率ttm", "市净率", "市销率", "市销率ttm"
+            "PE_ratio", "PE_ratio_ttm", "PCF_ratio_ttm", "PB_ratio", "PS_ratio", "PS_ratio_ttm"
         ]
 
         for stock in tqdm(stocks):
@@ -241,7 +246,7 @@ class Processor():
             price_type = price["type"]
             price_path = price["path"]
 
-            price_path = os.path.join(self.root, price_path, "{}.csv".format(stock))
+            price_path = os.path.join(self.root, price_path)
 
             # Define column mappings based on price_type
 
@@ -255,10 +260,10 @@ class Processor():
                 "昨日收盘价": "last_close",  # Using 昨日收盘价 as adj_close for now
             }
             # Additional columns to keep from Chinese format
-            additional_columns = [
-                "市盈率", "市盈率ttm", "市现率ttm", "市净率", "市销率", "市销率ttm"
-            ]
-            price_columns_extended = price_columns + additional_columns
+            additional_columns_map = {
+                "市盈率": "PE_ratio", "市盈率ttm": "PE_ratio_ttm", "市现率ttm": "PCF_ratio_ttm", "市净率": "PB_ratio", "市销率": "PS_ratio", "市销率ttm": "PS_ratio_ttm"
+            }
+            price_column_map.update(additional_columns_map)
 
             
 
@@ -272,8 +277,10 @@ class Processor():
                     price_df = price_df[price_df["thscode"] == stock]
             
             # Select and rename columns
-            columns_to_select = ["time"] + [col for col in price_df.columns if col in price_column_map.keys() or col in additional_columns]
-            price_df = price_df[columns_to_select]
+
+            columns_to_select_from_csv = [col for col in price_df.columns if col in price_column_map.keys()]
+            # Select only these relevant columns from the DataFrame
+            price_df = price_df[columns_to_select_from_csv]
             
             # Rename columns according to mapping
             rename_dict = {k: v for k, v in price_column_map.items() if k in price_df.columns}
@@ -300,11 +307,6 @@ class Processor():
             features_df = cal_factor(deepcopy(price_df[["timestamp"] + price_columns]), level=self.interval)
             features_df = cal_target(features_df)
             
-            # Add back any additional columns from the Chinese format
-            if price_type == "chinese" and set(additional_columns).issubset(price_df.columns):
-                for col in additional_columns:
-                    if col in price_df.columns:
-                        features_df[col] = price_df[col].values
             
             outpath = os.path.join(self.root, self.workdir, self.tag, "features")
             os.makedirs(outpath, exist_ok=True)
@@ -324,7 +326,6 @@ class Processor():
         news_columns = [
             "title",
             "text",
-            "source",
             "url"
         ]
 
@@ -336,21 +337,19 @@ class Processor():
                 news_type = news["type"]
                 news_path = news["path"]
 
-                news_path = os.path.join(self.root, news_path, "{}.csv".format(stock))
+                news_path = os.path.join(self.root, news_path)
                 news_column_map = {
                     "time": "timestamp",
-                    "新闻": "text",
+                    "新闻": "news",
                 }
                 # For Chinese format, we might not have all columns
                 # Set defaults for missing columns
                 default_values = {
                     "title": "",
-                    "source": "chinese_source",
+                    "text": "",
                     "url": ""
                 }
 
-
-                # Check if the file exists, if not, continue to the next news source
                 if not os.path.exists(news_path):
                     print(f"News path {news_path} does not exist, skipping...")
                     continue
@@ -371,23 +370,60 @@ class Processor():
                 news_df = news_df[columns_to_select]
                 news_df = news_df.rename(columns=news_column_map)
                 
-                # Add default values for missing columns
-                for col, default_val in default_values.items():
-                    if col not in news_df.columns:
-                        news_df[col] = default_val
 
 
                 news_df["timestamp"] = pd.to_datetime(news_df["timestamp"])
                 news_df = news_df[(news_df["timestamp"] >= start_date) & (news_df["timestamp"] < end_date)]
                 news_df = news_df.sort_values(by="timestamp")
                 
-                # Only attempt to drop duplicates if we have the necessary columns
-                if all(col in news_df.columns for col in ["timestamp", "title", "text"]):
-                    news_df = news_df.drop_duplicates(subset=["timestamp", "title", "text"], keep="first")
-                else:
-                    news_df = news_df.drop_duplicates(subset=["timestamp"], keep="first")
 
-                news_df["type"] = "chinese"
+                if 'news' in news_df.columns:
+                    expanded_data_list = []
+                    original_columns = news_df.columns.tolist()
+
+                    for index, row in news_df.iterrows():
+                        news_items_str = row.get('news') 
+                        
+                        if pd.notna(news_items_str) and isinstance(news_items_str, str):
+                            articles = [] # 初始化为空列表
+                            try:
+                                # 使用 ast.literal_eval 代替 json.loads
+                                parsed_data = ast.literal_eval(news_items_str)
+                                
+                                if isinstance(parsed_data, list):
+                                    articles = parsed_data
+                                elif isinstance(parsed_data, dict):
+                                    articles = [parsed_data] # 如果解析出单个字典，将其放入列表中
+                                else:
+                                    print(f"Warning: Parsed news data for row {index} is not a list or dict. Type: {type(parsed_data)}. Content: {str(parsed_data)[:200]}")
+                                    # articles 保持为空列表
+
+                            except (ValueError, SyntaxError) as e:
+                                print(f"Error parsing news_items_str with ast.literal_eval for row {index}: {e}")
+                                print(f"Problematic string (first 200 chars): {news_items_str[:200]}")
+                                # articles 保持为空列表，跳过此条错误数据
+                            
+                            for art in articles:
+                                publish_time = art.get("publish_time")
+                                title        = art.get("title")
+                                
+                                # 提取纯文本正文
+                                html_content = art.get("content", "")
+                                soup = BeautifulSoup(html_content, "html.parser")
+                                text = soup.get_text(" ", strip=True)          # 纯文本，段落间用空格分隔
+                                
+                                url = art.get("url")   # 如果 JSON 里没有 url 字段，可先为 None
+                                expanded_data_list.append(
+                                    {"timestamp": publish_time,
+                                    "title":        title,
+                                    "text":         text,
+                                    "url":          url}
+                                )
+
+                expanded_news_df = pd.DataFrame(expanded_data_list)
+                news_df = expanded_news_df
+                
+                news_df["type"] = "fmp"
 
                 news_df = news_df.reset_index(drop=True)
                 news_df = cal_news(news_df)
@@ -412,11 +448,11 @@ class Processor():
                 newses_df = newses_df.reset_index(drop=True)
                 
                 # Ensure all required columns exist
-                for col in ["timestamp", "type", "source", "title", "text", "url"]:
+                for col in ["timestamp", "type", "title", "text", "url"]:
                     if col not in newses_df.columns:
                         newses_df[col] = ""
                     
-                newses_df = newses_df[["timestamp", "type", "source", "title", "text", "url"]]
+                newses_df = newses_df[["timestamp", "type", "title", "text", "url"]]
 
                 outpath = os.path.join(self.root, self.workdir, self.tag, "news")
                 os.makedirs(outpath, exist_ok=True)

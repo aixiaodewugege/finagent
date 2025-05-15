@@ -14,10 +14,11 @@ class StrategyAgents:
         Renames columns to standard names.
         """
         if isinstance(data, np.ndarray):
-            df = pd.DataFrame(data, columns=['open', 'high', 'low', 'close', 'adj_close'])
+            df = pd.DataFrame(data, columns=['open', 'high', 'low', 'close'])
         else:
             df = data
         df = df.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volume': 'Volume'})
+        print(df.head())
         return df
 
     def wrapper(self,strategy, data,params=None):

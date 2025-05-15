@@ -1,5 +1,5 @@
 root = None
-selected_asset = "AAPL"
+selected_asset = "AAPL.O"
 asset_type = "company"
 workdir = "workdir/trading"
 tool_params_dir = "res/strategy_record/trading"
@@ -11,7 +11,7 @@ transaction_cost_pct = 1e-3
 
 # adjust the following parameters mainly
 trader_preference = "aggressive_trader"
-train_start_date = "2022-06-01"
+train_start_date = "2023-02-01"
 train_end_date = "2023-06-01"
 valid_start_date = "2023-06-01"
 valid_end_date = "2024-01-01"
@@ -44,9 +44,9 @@ dataset = dict(
     root=root,
     price_path="datasets/exp_stocks/price",
     news_path="datasets/exp_stocks/news",
-    guidance_path="datasets/exp_stocks/guidance",
-    sentiment_path="datasets/exp_stocks/sentiment",
-    economics_path="datasets/exp_stocks/economic.parquet",
+    guidance_path=None,
+    sentiment_path=None,
+    economics_path=None,
     interval="1d",
     assets_path="configs/_asset_list_/exp_stocks.txt",
     workdir=workdir,
@@ -103,17 +103,17 @@ memory = dict(
 
 latest_market_intelligence_summary = dict(
     type="LatestMarketIntelligenceSummaryTrading",
-    model = "gpt-4-1106-preview"
+    model = "gemini-2.5-pro-exp-03-25"
 )
 
 past_market_intelligence_summary = dict(
     type="PastMarketIntelligenceSummaryTrading",
-    model = "gpt-4-1106-preview"
+    model = "gemini-2.5-pro-exp-03-25"
 )
 
 low_level_reflection = dict(
     type="LowLevelReflectionTrading",
-    model = "gpt-4-vision-preview",
+    model = "gemini-2.5-pro-exp-03-25",
     short_term_past_date_range=short_term_past_date_range,
     medium_term_past_date_range=medium_term_past_date_range,
     long_term_past_date_range=long_term_past_date_range,
@@ -126,13 +126,13 @@ low_level_reflection = dict(
 
 high_level_reflection = dict(
     type="HighLevelReflectionTrading",
-    model = "gpt-4-vision-preview",
+    model = "gemini-2.5-pro-exp-03-25",
     previous_action_look_back_days=previous_action_look_back_days
 )
 
 decision = dict(
     type="DecisionTrading",
-    model = "gpt-4-1106-preview",
+    model = "gemini-2.5-pro-exp-03-25",
 )
 
 provider = dict(

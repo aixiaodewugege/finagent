@@ -10,36 +10,14 @@ processor = dict(
         "prices": [
             {
                 "type": "fmp",
-                "path":"workdir/fmp_day_prices_exp",
+                "path":r"C:\Users\90701\projects\data.csv",
             }
         ],
         "news": [
             {
                 "type": "fmp",
-                "path":"workdir/fmp_news_exp",
+                "path":r"C:\Users\90701\projects\data.csv",
             },
-            {
-                "type": "yahoofinance",
-                "path":"workdir/yahoofinance_news_exp",
-            }
-        ],
-        "guidance": [
-            {
-                "type": "rapidapi_seekingalpha",
-                "path":"workdir/rapidapi_seekingalpha_analysis_exp",
-            }
-        ],
-        "sentiment": [
-            {
-                "type": "fmp",
-                "path":"workdir/fmp_sentiment_exp",
-            }
-        ],
-        "economic": [
-            {
-                "type": "fmp",
-                "path":"workdir/fmp_economic_exp",
-            }
         ],
     },
     start_date = "2020-01-01",

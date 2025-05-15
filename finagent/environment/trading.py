@@ -30,9 +30,9 @@ class EnvironmentTrading(gym.Env):
 
         self.prices = self.dataset.prices
         self.news = self.dataset.news
-        self.guidances = self.dataset.guidances
-        self.sentiments = self.dataset.sentiments
-        self.economics = self.dataset.economics
+        self.guidances = None
+        self.sentiments = None
+        self.economics = None
 
         self.prices_df = self.prices[self.selected_asset]
         self.news_df = self.news[self.selected_asset]
@@ -109,7 +109,7 @@ class EnvironmentTrading(gym.Env):
         return self.prices_df.index[self.day]
 
     def get_current_price(self):
-        return self.prices_df.iloc[self.day]["adj_close"]
+        return self.prices_df.iloc[self.day]["close"]
 
     def current_value(self, price):
         return self.cash + self.position * price

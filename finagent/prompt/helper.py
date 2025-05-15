@@ -155,6 +155,7 @@ def prepared_tools_params(state: Dict,
     for i in range(4):
         strategy_number = i + 1
         data = price[price.index <= date]
+        
         # Do not use best params for now
 
         # Read the best parameters from training
@@ -179,7 +180,6 @@ def prepared_tools_params(state: Dict,
             trading_record_save_path = os.path.join(ROOT, cfg.tool_params_dir, cfg.selected_asset, str(strategy_number),
                                                      "exp001","default",
                                                      "best_result.json")
-        
         strategy_signals, explanations = strategy_agents.wrapper(strategy_number, data)
         print(date)
         last_signal = strategy_signals[-1]
