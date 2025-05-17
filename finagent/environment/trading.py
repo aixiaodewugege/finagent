@@ -79,13 +79,6 @@ class EnvironmentTrading(gym.Env):
         self.prices_df = self.prices_df.set_index("timestamp")
         self.news_df = self.news_df.set_index("timestamp")
 
-        if self.guidances_df is not None:
-            self.guidances_df = self.guidances_df.set_index("timestamp")
-        if self.sentiments_df is not None:
-            self.sentiments_df = self.sentiments_df.set_index("timestamp")
-        if self.economics_df is not None:
-            self.economics_df = self.economics_df.set_index("timestamp")
-
         self.day = self.init_day
         self.value = self.initial_amount
         self.cash = self.initial_amount
@@ -127,29 +120,9 @@ class EnvironmentTrading(gym.Env):
         news = self.news_df[self.news_df.index <= days_future]
         news = news[news.index >= days_ago]
 
-        if self.guidances_df is not None:
-            guidance = self.guidances_df[self.guidances_df.index <= days_future]
-            guidance = guidance[guidance.index >= days_ago]
-        else:
-            guidance = None
-
-        if self.sentiments_df is not None:
-            sentiment = self.sentiments_df[self.sentiments_df.index <= days_future]
-            sentiment = sentiment[sentiment.index >= days_ago]
-        else:
-            sentiment = None
-
-        if self.economics_df is not None:
-            economic = self.economics_df[self.economics_df.index <= days_future]
-            economic = economic[economic.index >= days_ago]
-        else:
-            economic = None
 
         state["price"] = price
         state["news"] = news
-        state["guidance"] = guidance
-        state["sentiment"] = sentiment
-        state["economic"] = economic
 
         return state
 
@@ -192,13 +165,13 @@ class EnvironmentTrading(gym.Env):
         # position <= cash / price / (1 + transaction_cost_pct)
         return int(np.floor(self.cash / price / (1 + self.transaction_cost_pct)))
 
-    # def eval_sell_position(self):
-    #     # evaluate sell position
-    #     return int(self.position)
-    
     def eval_sell_position(self):
-        max_short_position = int(self.initial_amount / self.price / (1 + self.transaction_cost_pct))
-        return int(self.position + max_short_position)
+        # evaluate sell position
+        return int(self.position)
+    
+    # def eval_sell_position(self):
+    #     max_short_position = int(self.initial_amount / self.price / (1 + self.transaction_cost_pct))
+    #     return int(self.position + max_short_position)
 
 
     def buy(self, price, amount=1):
@@ -292,114 +265,3 @@ class EnvironmentTrading(gym.Env):
         }
 
         return next_state, reward, done, truncted, info
-
-
-if __name__ == '__main__':
-    from finagent.data.dataset import Dataset
-
-    # root = "workspace/RA/FinAgentPrivate"
-    # selected_asset = "TSLA"
-    # dataset = Dataset(
-    #     root=root,
-    #     price_path="datasets/exp_stocks/price",
-    #     news_path="datasets/exp_stocks/news",
-    #     guidance_path="datasets/exp_stocks/guidance",
-    #     sentiment_path="datasets/exp_stocks/sentiment",
-    #     economics_path="datasets/exp_stocks/economic.parquet",
-    #     interval="1d",
-    #     stocks_path="configs/_asset_list_/exp_stocks.txt",
-    #     workdir=os.path.join(root, "workdir"),
-    #     tag="exp"
-    # )
-    # env = EnvironmentTrading(
-    #     mode="train",
-    #     dataset=dataset,
-    #     selected_asset=selected_asset,
-    #     start_date="2022-06-01",
-    #     end_date="2024-01-01",
-    #     look_back_days=14,
-    #     look_forward_days=14,
-    #     initial_amount=1e4,
-    #     transaction_cost_pct=1e-3,
-    #     discount=1.0,
-    # )
-    #
-    # df = env.news_df
-    # df = df[df.index >= "2022-06-01"]
-    # df = df[df.index < "2024-01-01"]
-    # print("number of news: {}".format(len(df)))
-    #
-    # df = env.guidances_df
-    # df = df[df.index >= "2022-06-01"]
-    # df = df[df.index < "2024-01-01"]
-    # print("number of guidance: {}".format(len(df)))
-    #
-    # df = env.sentiments_df
-    # df = df[df.index >= "2022-06-01"]
-    # df = df[df.index < "2024-01-01"]
-    # print("number of sentiment: {}".format(len(df)))
-
-
-    root = "workspace/RA/FinAgentPrivate"
-    selected_asset = "EURUSD"
-    dataset = Dataset(
-        root=root,
-        price_path="datasets/exp_forexs/price",
-        news_path="datasets/exp_forexs/news",
-        guidance_path=None,
-        sentiment_path=None,
-        economics_path=None,
-        interval="1d",
-        stocks_path="configs/_asset_list_/exp_forexs.txt",
-        workdir=os.path.join(root, "workdir"),
-        tag="exp"
-    )
-    env = EnvironmentTrading(
-        mode="train",
-        dataset=dataset,
-        selected_asset=selected_asset,
-        start_date="2022-06-01",
-        end_date="2024-01-01",
-        look_back_days=14,
-        look_forward_days=14,
-        initial_amount=1e4,
-        transaction_cost_pct=1e-3,
-        discount=1.0,
-    )
-
-    df = env.news_df
-    df = df[df.index >= "2022-06-01"]
-    df = df[df.index < "2024-01-01"]
-    print("number of news: {}".format(len(df)))
-
-    root = "workspace/RA/FinAgentPrivate"
-    selected_asset = "ETHUSD"
-    dataset = Dataset(
-        root=root,
-        price_path="datasets/exp_cryptos/price",
-        news_path="datasets/exp_cryptos/news",
-        guidance_path=None,
-        sentiment_path=None,
-        economics_path=None,
-        interval="1d",
-        stocks_path="configs/_asset_list_/exp_cryptos.txt",
-        workdir=os.path.join(root, "workdir"),
-        tag="exp"
-    )
-    env = EnvironmentTrading(
-        mode="train",
-        dataset=dataset,
-        selected_asset=selected_asset,
-        start_date="2022-06-01",
-        end_date="2024-01-01",
-        look_back_days=14,
-        look_forward_days=14,
-        initial_amount=1e4,
-        transaction_cost_pct=1e-3,
-        discount=1.0,
-    )
-
-    df = env.news_df
-    df = df[df.index >= "2022-06-01"]
-    df = df[df.index < "2024-01-01"]
-    print("number of news: {}".format(len(df)))

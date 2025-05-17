@@ -229,23 +229,23 @@ def run_step(cfg, state, info, plots, memory, provider, diverse_query, strategy_
     save_dir = "train" if mode == "train" else "valid"
 
     # plot kline
-    print(state['price']) # dict_keys(['price', 'news', 'guidance', 'sentiment', 'economic'])
+    print(state['price']) # dict_keys(['price', 'news'])
     kline_path = plots.plot_kline(state=state, info=info, save_dir=save_dir, mode=mode)
     params.update({
         "kline_path": kline_path
     })
 
-    # tools
-    tools_params = prepared_tools_params(state=state,
-                                         info=info,
-                                         params=params,
-                                         memory=memory,
-                                         provider=provider,
-                                         diverse_query=diverse_query,
-                                         strategy_agents=strategy_agents,
-                                         cfg=cfg,
-                                         mode=mode)
-    params.update(tools_params)
+    # # tools
+    # tools_params = prepared_tools_params(state=state,
+    #                                      info=info,
+    #                                      params=params,
+    #                                      memory=memory,
+    #                                      provider=provider,
+    #                                      diverse_query=diverse_query,
+    #                                      strategy_agents=strategy_agents,
+    #                                      cfg=cfg,
+    #                                      mode=mode)
+    # params.update(tools_params)
 
     # latest market intelligence
     latest_market_intelligence_summary_template = read_resource_file(cfg.train_latest_market_intelligence_summary_template_path

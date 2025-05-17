@@ -297,7 +297,14 @@ def prepare_latest_market_intelligence_params(state: Dict,
         high = item["high"]
         low = item["low"]
         close = item["close"]
-        adj_close = item["adj_close"]
+        last_close = item["last_close"]
+        volume = item["volume"]
+        PE_ratio = item["PE_ratio"]
+        PE_ratio_ttm = item["PE_ratio_ttm"]
+        PCF_ratio_ttm = item["PCF_ratio_ttm"]
+        PB_ratio = item["PB_ratio"]
+        PS_ratio = item["PS_ratio"]
+        PS_ratio_ttm = item["PS_ratio_ttm"]
 
         past_market_intelligence_query_item = f"Date: {date}.\n"
 
@@ -305,7 +312,8 @@ def prepare_latest_market_intelligence_params(state: Dict,
                                                f"Headline: {title}\n" + \
                                                f"Content: {text}\n"
         if math.isnan(open) == False:
-            past_market_intelligence_query_item += f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), Adj Close: ({adj_close})\n"
+            past_market_intelligence_query_item +=  f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), Last Close: ({last_close}, volume: ({volume}, PE_ratio: ({PE_ratio}, PE_ratio_ttm: ({PE_ratio_ttm}, \
+                PCF_ratio_ttm: ({PCF_ratio_ttm}, PB_ratio: ({PB_ratio}, PS_ratio: ({PS_ratio}, PS_ratio_ttm: ({PS_ratio_ttm})\n"
         else:
             past_market_intelligence_query_item += f"Prices: Today is closed for trading.\n"
 

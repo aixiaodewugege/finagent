@@ -6,22 +6,22 @@ tool_params_dir = "res/strategy_record/trading"
 tool_use_best_params = True
 tag = f"{selected_asset}"
 
-initial_amount = 1e4
+initial_amount = 1e7
 transaction_cost_pct = 1e-3
 
 # adjust the following parameters mainly
 trader_preference = "aggressive_trader"
-train_start_date = "2023-02-01"
+train_start_date = "2023-02-15"
 train_end_date = "2023-06-01"
 valid_start_date = "2023-06-01"
 valid_end_date = "2024-01-01"
 
 short_term_past_date_range = 1
 medium_term_past_date_range = 7
-long_term_past_date_range = 14
-short_term_next_date_range = 1
-medium_term_next_date_range = 7
-long_term_next_date_range = 14
+long_term_past_date_range = 28
+short_term_next_date_range = 0
+medium_term_next_date_range = 0
+long_term_next_date_range = 0
 look_forward_days = long_term_next_date_range
 look_back_days = long_term_past_date_range
 previous_action_look_back_days = 14

@@ -59,8 +59,17 @@ class LatestMarketIntelligenceSummaryTrading(Prompt):
             high = price["high"].values[0]
             low = price["low"].values[0]
             close = price["close"].values[0]
-            adj_close = price["adj_close"].values[0]
-            latest_market_intelligence_text += f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), Adj Close: ({adj_close})\n"
+            last_close = price["last_close"].values[0]
+            volume = price["volume"].values[0]
+            PE_ratio = price["PE_ratio"].values[0]
+            PE_ratio_ttm = price["PE_ratio_ttm"].values[0]
+            PCF_ratio_ttm = price["PCF_ratio_ttm"].values[0]
+            PB_ratio = price["PB_ratio"].values[0]
+            PS_ratio = price["PS_ratio"].values[0]
+            PS_ratio_ttm = price["PS_ratio_ttm"].values[0]
+
+            latest_market_intelligence_text += f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), Last Close: ({last_close}, volume: ({volume}, PE_ratio: ({PE_ratio}, PE_ratio_ttm: ({PE_ratio_ttm}, \
+                PCF_ratio_ttm: ({PCF_ratio_ttm}, PB_ratio: ({PB_ratio}, PS_ratio: ({PS_ratio}, PS_ratio_ttm: ({PS_ratio_ttm})\n"
         else:
             latest_market_intelligence_text += f"Prices: Today is closed for trading.\n"
 
@@ -143,13 +152,19 @@ class LatestMarketIntelligenceSummaryTrading(Prompt):
             high = price["high"].values[0]
             low = price["low"].values[0]
             close = price["close"].values[0]
-            adj_close = price["adj_close"].values[0]
+            last_close = price["last_close"].values[0]
+            volume = price["volume"].values[0]
+            PE_ratio = price["PE_ratio"].values[0]
+            PE_ratio_ttm = price["PE_ratio_ttm"].values[0]
+            PCF_ratio_ttm = price["PCF_ratio_ttm"].values[0]
+            PB_ratio = price["PB_ratio"].values[0]
+            PS_ratio = price["PS_ratio"].values[0]
+            PS_ratio_ttm = price["PS_ratio_ttm"].values[0]
         else:
             open = math.nan
             high = math.nan
             low = math.nan
             close = math.nan
-            adj_close = math.nan
 
         for row in news.iterrows():
             date = row[0] if isinstance(row[0], str) else row[0].strftime("%Y-%m-%d")
@@ -173,7 +188,14 @@ class LatestMarketIntelligenceSummaryTrading(Prompt):
                 "high": high,
                 "low": low,
                 "close": close,
-                "adj_close": adj_close,
+                "last_close": last_close,
+                "volume": volume,
+                "PE_ratio": PE_ratio,
+                "PE_ratio_ttm": PE_ratio_ttm,
+                "PCF_ratio_ttm": PCF_ratio_ttm,
+                "PB_ratio": PB_ratio,
+                "PS_ratio": PS_ratio,
+                "PS_ratio_ttm": PS_ratio_ttm,
                 "query": response_dict["query"],
                 "summary": response_dict["summary"],
                 "embedding_text": embedding_text,

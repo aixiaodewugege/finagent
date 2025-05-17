@@ -96,7 +96,7 @@ class OpenAIProvider(LLMProvider, EmbeddingProvider):
         else:
             key = os.getenv(key_var_name)
             self.client = OpenAI(
-                api_key="",
+                api_key="sk-wkOfreJnHVPbfJc_bjN04_Zota-OOHb1wA6lwRjdmOeUx21JhTBNL9n9GFI",
                 base_url="https://api.zmone.me/v1"
             )
 
