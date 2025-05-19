@@ -11,8 +11,8 @@ transaction_cost_pct = 1e-3
 
 # adjust the following parameters mainly
 trader_preference = "aggressive_trader"
-train_start_date = "2023-02-15"
-train_end_date = "2023-06-01"
+train_start_date = "2023-03-15"
+train_end_date = "2023-07-01"
 valid_start_date = "2023-06-01"
 valid_end_date = "2024-01-01"
 
@@ -42,7 +42,7 @@ valid_decision_template_path = "res/prompts/template/valid/trading/decision.html
 dataset = dict(
     type="Dataset",
     root=root,
-    price_path="datasets/exp_stocks/price",
+    price_path="datasets/exp_stocks/features",
     news_path="datasets/exp_stocks/news",
     guidance_path=None,
     sentiment_path=None,

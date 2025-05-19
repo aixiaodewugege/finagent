@@ -25,20 +25,7 @@ class Dataset(BaseDataset):
         self.root = root
         self.price_path = os.path.join(root, price_path)
         self.news_path = os.path.join(root, news_path)
-        if guidance_path is not None:
-            self.guidance_path = os.path.join(root, guidance_path)
-        else:
-            self.guidance_path = None
 
-        if sentiment_path is not None:
-            self.sentiment_path = os.path.join(root, sentiment_path)
-        else:
-            self.sentiment_path = None
-
-        if economics_path is not None:
-            self.economics_path = os.path.join(root, economics_path)
-        else:
-            self.economics_path = None
 
         self.assets_path = os.path.join(root, assets_path)
         self.interval = interval
@@ -76,7 +63,7 @@ class Dataset(BaseDataset):
             df = df.reset_index(drop=True)
 
             df = df[["timestamp", "open", "high", "low", "close", "last_close", "volume",'PE_ratio', 'PE_ratio_ttm', 'PCF_ratio_ttm', 'PB_ratio', 'PS_ratio',
-       'PS_ratio_ttm']]
+       'PS_ratio_ttm',"RSI", "ADX", "BB_lower", "BB_middle", "BB_upper", "VWMA", "CCI", "MACD", "MACD_signal"]]
 
             prices[asset] = df
 
@@ -109,80 +96,6 @@ class Dataset(BaseDataset):
 
         return news
 
-    def _load_guidances(self):
-
-        guidances = {}
-
-        if self.guidance_path is None:
-            return None
-
-        for asset in self.assets:
-            path = os.path.join(self.guidance_path, "{}.parquet".format(asset))
-            df = pd.read_parquet(path)
-
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df["timestamp"] = df["timestamp"].apply(lambda x: x.strftime("%Y-%m-%d"))
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-            df = df.dropna(axis=0, how="any")
-            df = df.sort_values(by="timestamp")
-            df = df.reset_index(drop=True)
-
-            df = df[["timestamp", "sentiment", "title", "text"]]
-
-            guidances[asset] = df
-
-        return guidances
-
-    def _load_sentiments(self):
-
-        sentiments = {}
-
-        if self.sentiment_path is None:
-            return None
-
-        for asset in self.assets:
-            path = os.path.join(self.sentiment_path, "{}.parquet".format(asset))
-            df = pd.read_parquet(path)
-
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-            df["timestamp"] = df["timestamp"].apply(lambda x: x.strftime("%Y-%m-%d"))
-            df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-            df = df.dropna(axis=0, how="any")
-            df = df.sort_values(by="timestamp")
-            df = df.reset_index(drop=True)
-
-            df = df[["timestamp",
-                     "stocktwits_posts",
-                     "stocktwits_comments",
-                     "stocktwits_likes",
-                     "stocktwits_impressions",
-                     "stocktwits_sentiment"]]
-
-            sentiments[asset] = df
-
-        return sentiments
-
-    def _load_economics(self):
-
-        if self.economics_path is None:
-            return None
-
-        path = os.path.join(self.economics_path)
-
-        economics = pd.read_parquet(path)
-
-        economics["timestamp"] = pd.to_datetime(economics["timestamp"])
-        economics["timestamp"] = economics["timestamp"].apply(lambda x: x.strftime("%Y-%m-%d"))
-        economics["timestamp"] = pd.to_datetime(economics["timestamp"])
-
-        economics = economics.sort_values(by="timestamp")
-        economics = economics.reset_index(drop=True)
-
-        economics = economics[["timestamp", "gdp", "cpi", "unemployment_rate", "federal_funds", "inflation_rate"]]
-
-        return economics
 
 if __name__ == '__main__':
 

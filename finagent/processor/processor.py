@@ -13,6 +13,7 @@ import json
 from bs4 import BeautifulSoup   # pip install beautifulsoup4
 import pandas as pd
 import ast
+import ta  # Ensure you have the ta library installed
 
 @backoff.on_exception(backoff.expo,(Exception,), max_tries=3, max_value=10, jitter=None)
 def langchain_parse_url(url):
@@ -49,138 +50,26 @@ def cal_news(df):
 
 
 def cal_factor(df, level="day"):
-    # intermediate values
-    df['max_oc'] = df[["open", "close"]].max(axis=1)
-    df['min_oc'] = df[["open", "close"]].min(axis=1)
-    df["kmid"] = (df["close"] - df["open"]) / df["close"]
-    df['kmid2'] = (df['close'] - df['open']) / (df['high'] - df['low'] + 1e-12)
-    df["klen"] = (df["high"] - df["low"]) / df["open"]
-    df['kup'] = (df['high'] - df['max_oc']) / df['open']
-    df['kup2'] = (df['high'] - df['max_oc']) / (df['high'] - df['low'] + 1e-12)
-    df['klow'] = (df['min_oc'] - df['low']) / df['open']
-    df['klow2'] = (df['min_oc'] - df['low']) / (df['high'] - df['low'] + 1e-12)
-    df["ksft"] = (2 * df["close"] - df["high"] - df["low"]) / df["open"]
-    df['ksft2'] = (2 * df['close'] - df['high'] - df['low']) / (df['high'] - df['low'] + 1e-12)
-    df.drop(columns=['max_oc', 'min_oc'], inplace=True)
+    # Calculate additional technical indicators using default window sizes
+    df['RSI'] = ta.momentum.rsi(df['close'])
 
-    window = [5, 10, 20, 30, 60]
-    for w in window:
-        df['roc_{}'.format(w)] = df['close'].shift(w) / df['close']
+    adx = ta.trend.adx(df['high'], df['low'], df['close'])
+    df['ADX'] = adx
 
-    for w in window:
-        df['ma_{}'.format(w)] = df['close'].rolling(w).mean() / df['close']
+    bollinger = ta.volatility.BollingerBands(df['close'])
+    df['BB_lower'] = bollinger.bollinger_lband()
+    df['BB_middle'] = bollinger.bollinger_mavg()
+    df['BB_upper'] = bollinger.bollinger_hband()
 
-    for w in window:
-        df['std_{}'.format(w)] = df['close'].rolling(w).std() / df['close']
+    df['ATR'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'])
 
-    for w in window:
-        df['beta_{}'.format(w)] = (df['close'].shift(w) - df['close']) / (w * df['close'])
+    df['VWMA'] = ta.volume.volume_weighted_average_price(df['high'], df['low'], df['close'], df['volume'])
 
-    for w in window:
-        df['max_{}'.format(w)] = df['close'].rolling(w).max() / df['close']
+    df['CCI'] = ta.trend.cci(df['high'], df['low'], df['close'])
 
-    for w in window:
-        df['min_{}'.format(w)] = df['close'].rolling(w).min() / df['close']
-
-    for w in window:
-        df['qtlu_{}'.format(w)] = df['close'].rolling(w).quantile(0.8) / df['close']
-
-    for w in window:
-        df['qtld_{}'.format(w)] = df['close'].rolling(w).quantile(0.2) / df['close']
-
-    for w in window:
-        df['rank_{}'.format(w)] = df['close'].rolling(w).apply(my_rank) / w
-
-    for w in window:
-        df['imax_{}'.format(w)] = df['high'].rolling(w).apply(np.argmax) / w
-
-    for w in window:
-        df['imin_{}'.format(w)] = df['low'].rolling(w).apply(np.argmin) / w
-
-    for w in window:
-        df['imxd_{}'.format(w)] = (df['high'].rolling(w).apply(np.argmax) - df['low'].rolling(w).apply(np.argmin)) / w
-
-    for w in window:
-        shift = df['close'].shift(w)
-        min = df["low"].where(df["low"] < shift, shift)
-        max = df["high"].where(df["high"] > shift, shift)
-        df["rsv_{}".format(w)] = (df["close"] - min) / (max - min + 1e-12)
-
-    df['ret1'] = df['close'].pct_change(1)
-    for w in window:
-        df['cntp_{}'.format(w)] = (df['ret1'].gt(0)).rolling(w).sum() / w
-
-    for w in window:
-        df['cntn_{}'.format(w)] = (df['ret1'].lt(0)).rolling(w).sum() / w
-
-    for w in window:
-        df['cntd_{}'.format(w)] = df['cntp_{}'.format(w)] - df['cntn_{}'.format(w)]
-
-    for w in window:
-        df1 = df["close"].rolling(w)
-        df2 = np.log(df["volume"] + 1).rolling(w)
-        df["corr_{}".format(w)] = df1.corr(pairwise = df2)
-
-    for w in window:
-        df1 = df["close"]
-        df_shift1 = df1.shift(1)
-        df2 = df["volume"]
-        df_shift2 = df2.shift(1)
-        df1 = df1 / df_shift1
-        df2 = np.log(df2 / df_shift2 + 1)
-        df["cord_{}".format(w)] = df1.rolling(w).corr(pairwise = df2.rolling(w))
-
-    df['abs_ret1'] = np.abs(df['ret1'])
-    df['pos_ret1'] = df['ret1']
-    df['pos_ret1'][df['pos_ret1'].lt(0)] = 0
-
-    for w in window:
-        df['sump_{}'.format(w)] = df['pos_ret1'].rolling(w).sum() / (df['abs_ret1'].rolling(w).sum() + 1e-12)
-
-    for w in window:
-        df['sumn_{}'.format(w)] = 1 - df['sump_{}'.format(w)]
-
-    for w in window:
-        df['sumd_{}'.format(w)] = 2 * df['sump_{}'.format(w)] - 1
-
-    for w in window:
-        df["vma_{}".format(w)] = df["volume"].rolling(w).mean() / (df["volume"] + 1e-12)
-
-    for w in window:
-        df["vstd_{}".format(w)] = df["volume"].rolling(w).std() / (df["volume"] + 1e-12)
-
-    for w in window:
-        shift = np.abs((df["close"] / df["close"].shift(1) - 1)) * df["volume"]
-        df1 = shift.rolling(w).std()
-        df2 = shift.rolling(w).mean()
-        df["wvma_{}".format(w)] = df1 / (df2 + 1e-12)
-
-    df['vchg1'] = df['volume'] - df['volume'].shift(1)
-    df['abs_vchg1'] = np.abs(df['vchg1'])
-    df['pos_vchg1'] = df['vchg1']
-    df['pos_vchg1'][df['pos_vchg1'].lt(0)] = 0
-
-    for w in window:
-        df["vsump_{}".format(w)] = df["pos_vchg1"].rolling(w).sum() / (df["abs_vchg1"].rolling(w).sum() + 1e-12)
-    for w in window:
-        df["vsumn_{}".format(w)] = 1 - df["vsump_{}".format(w)]
-    for w in window:
-        df["vsumd_{}".format(w)] = 2 * df["vsump_{}".format(w)] - 1
-
-    df["log_volume"] = np.log(df["volume"] + 1)
-
-    df.drop(columns=['ret1', 'abs_ret1', 'pos_ret1', 'vchg1', 'abs_vchg1', 'pos_vchg1', 'volume'], inplace=True)
-
-    df.replace([np.inf, -np.inf], np.nan, inplace=True)
-    df = df.fillna(0)
-
-    if level == "minute":
-        df["minute"] = pd.to_datetime(df.index).minute
-        df["hour"] = pd.to_datetime(df.index).hour
-
-    df["day"] = pd.to_datetime(df.index).day
-    df["weekday"] = pd.to_datetime(df.index).weekday
-    df["month"] = pd.to_datetime(df.index).month
+    macd = ta.trend.macd(df['close'])
+    df['MACD'] = macd
+    df['MACD_signal'] = ta.trend.macd_signal(df['close'])
 
     return df
 
@@ -305,7 +194,7 @@ class Processor():
 
             # For features calculation, use only the standard price columns
             features_df = cal_factor(deepcopy(price_df[["timestamp"] + price_columns]), level=self.interval)
-            features_df = cal_target(features_df)
+            # features_df = cal_target(features_df)
             
             
             outpath = os.path.join(self.root, self.workdir, self.tag, "features")

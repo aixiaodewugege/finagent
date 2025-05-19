@@ -19,6 +19,8 @@ class EnvironmentTrading(gym.Env):
                  initial_amount: float = 1e4,
                  transaction_cost_pct: float = 1e-3,
                  discount: float = 1.0,
+                 cvar_alpha: float = 0.05,  # Alpha for CVaR (e.g., 0.05 for 95% CVaR)
+                 cvar_window: int = 28,  # Lookback window for CVaR calculation
                  ):
         super(EnvironmentTrading, self).__init__()
 
@@ -36,20 +38,6 @@ class EnvironmentTrading(gym.Env):
 
         self.prices_df = self.prices[self.selected_asset]
         self.news_df = self.news[self.selected_asset]
-        if self.guidances is not None:
-            self.guidances_df = self.guidances[self.selected_asset]
-        else:
-            self.guidances_df = None
-
-        if self.sentiments is not None:
-            self.sentiments_df = self.sentiments[self.selected_asset]
-        else:
-            self.sentiments_df = None
-
-        if self.economics is not None:
-            self.economics_df = self.economics
-        else:
-            self.economics_df = None
 
         self.start_date = start_date
         self.end_date = end_date
@@ -63,15 +51,15 @@ class EnvironmentTrading(gym.Env):
         self.transaction_cost_pct = transaction_cost_pct
         self.discount = discount
 
+        # CVaR parameters
+        self.cvar_alpha = cvar_alpha
+        self.cvar_window = cvar_window
+        self.historical_returns = []
+        self.current_cvar = 0.0
+
         self.prices_df = self.prices_df.reset_index(drop=True)
         self.news_df = self.news_df.reset_index(drop=True)
 
-        if self.guidances_df is not None:
-            self.guidances_df = self.guidances_df.reset_index(drop=True)
-        if self.sentiments_df is not None:
-            self.sentiments_df = self.sentiments_df.reset_index(drop=True)
-        if self.economics_df is not None:
-            self.economics_df = self.economics_df.reset_index(drop=True)
 
         self.init_day = self.prices_df[self.prices_df["timestamp"] >= start_date].index.values[0]
         self.end_day = self.prices_df[self.prices_df["timestamp"] <= end_date].index.values[-1]
@@ -103,6 +91,51 @@ class EnvironmentTrading(gym.Env):
 
     def get_current_price(self):
         return self.prices_df.iloc[self.day]["close"]
+
+    def _calculate_cvar(self, returns_history: list, window: int, alpha: float) -> float:
+        """
+        Calculates Conditional Value at Risk (CVaR).
+        CVaR is the expected loss given that the loss is greater than or equal to VaR.
+        It's calculated as the negative of the mean of the worst 'alpha' percent returns.
+        """
+        if not (0 < alpha < 1):
+            return 0.0  # Alpha must be between 0 and 1
+
+        # Use returns from the specified window
+        if len(returns_history) < window:
+             # Not enough data points for the full window,
+             # could use available data if len(returns_history) >= 1/alpha for example
+             # For now, require full window or a reasonable minimum.
+             # Let's use a minimum of 1/alpha points if window is not met.
+            min_points_for_cvar = int(np.ceil(1 / alpha))
+            if len(returns_history) < min_points_for_cvar:
+                return 0.0 # Not enough data to reliably calculate CVaR
+            relevant_returns = np.array(returns_history) # Use all available if less than window but more than min_points
+        else:
+            relevant_returns = np.array(returns_history[-window:])
+
+        if len(relevant_returns) == 0:
+            return 0.0
+
+        sorted_returns = np.sort(relevant_returns)  # Sorts in ascending order (worst returns first)
+
+        # Determine the number of returns to average for CVaR
+        num_worst_returns = int(np.ceil(alpha * len(sorted_returns)))
+
+        if num_worst_returns == 0: # Should ideally not happen if alpha > 0 and len > 0
+            return 0.0
+
+        # Select the worst returns (the smallest ones)
+        worst_returns_slice = sorted_returns[:num_worst_returns]
+
+        if len(worst_returns_slice) == 0:
+            return 0.0
+            
+        # CVaR is the negative of the mean of these worst returns
+        # (representing average loss in the tail, expressed as a positive value)
+        cvar = -np.mean(worst_returns_slice)
+        
+        return max(0.0, cvar) # CVaR should be non-negative
 
     def current_value(self, price):
         return self.cash + self.position * price
@@ -138,6 +171,8 @@ class EnvironmentTrading(gym.Env):
         self.total_return = 0
         self.total_profit = 0
         self.action = "HOLD"
+        self.historical_returns = [] # Reset historical returns
+        self.current_cvar = 0.0      # Reset current CVaR
 
         state = self.get_state()
 
@@ -154,7 +189,8 @@ class EnvironmentTrading(gym.Env):
             "discount": float(self.discount),
             "total_profit": float(self.total_profit),
             "total_return": float(self.total_return),
-            "action": self.action
+            "action": self.action,
+            "cvar": float(self.current_cvar) # Add CVaR to info
         }
 
         return state, info
@@ -223,7 +259,21 @@ class EnvironmentTrading(gym.Env):
 
         post_value = self.value
 
-        reward = (post_value - pre_value) / pre_value
+        daily_return = (post_value - pre_value) / pre_value if pre_value != 0 else 0
+        self.historical_returns.append(daily_return)
+
+        # Calculate CVaR
+        if len(self.historical_returns) > 0 : # Ensure there's at least one return
+            self.current_cvar = self._calculate_cvar(
+                returns_history=self.historical_returns,
+                window=self.cvar_window,
+                alpha=self.cvar_alpha
+            )
+        else:
+            self.current_cvar = 0.0
+        
+        # Reward is now just the daily return
+        reward = daily_return
 
         self.day = self.day + 1
 
@@ -240,13 +290,13 @@ class EnvironmentTrading(gym.Env):
         self.value = post_value
         self.cash = self.cash
         self.position = self.position
-        self.ret = (post_value - pre_value) / pre_value
+        self.ret = daily_return
         self.date = self.get_current_date()
 
         self.price = self.get_current_price()
         self.total_return += self.discount * reward
         self.discount *= 0.99
-        self.total_profit = 100 * (self.value - self.initial_amount) / self.initial_amount
+        self.total_profit = 100 * (self.value - self.initial_amount) / self.initial_amount if self.initial_amount != 0 else 0
 
         info = {
             "symbol": str(self.symbol),
@@ -255,13 +305,14 @@ class EnvironmentTrading(gym.Env):
             "value": float(self.value),
             "cash": float(self.cash),
             "position": int(self.position),
-            "ret": float(self.ret),
+            "ret": float(self.ret), 
             "date": self.date.strftime('%Y-%m-%d'),
             "price": float(self.price),
             "discount": float(self.discount),
             "total_profit": float(self.total_profit),
             "total_return": float(self.total_return),
-            "action": str(self.action)
+            "action": str(self.action),
+            "cvar": float(self.current_cvar) # Add current CVaR to info
         }
 
         return next_state, reward, done, truncted, info

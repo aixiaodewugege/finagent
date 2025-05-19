@@ -80,7 +80,7 @@ def plot_kline(df,
                 data=[
                     opts.MarkPointItem(
                         coord=[now_date, df.loc[now_date, 'High']],
-                        value=now_date,
+                        value=now_date.strftime("%m-%d"), 
                         symbol_size=50,
                         symbol="pin",
                         itemstyle_opts=opts.ItemStyleOpts(color="grey", opacity=0.5),

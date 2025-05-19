@@ -68,8 +68,39 @@ class LatestMarketIntelligenceSummaryTrading(Prompt):
             PS_ratio = price["PS_ratio"].values[0]
             PS_ratio_ttm = price["PS_ratio_ttm"].values[0]
 
-            latest_market_intelligence_text += f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), Last Close: ({last_close}, volume: ({volume}, PE_ratio: ({PE_ratio}, PE_ratio_ttm: ({PE_ratio_ttm}, \
-                PCF_ratio_ttm: ({PCF_ratio_ttm}, PB_ratio: ({PB_ratio}, PS_ratio: ({PS_ratio}, PS_ratio_ttm: ({PS_ratio_ttm})\n"
+            
+            RSI = price["RSI"].values[0]
+            ADX = price["ADX"].values[0]
+            BB_lower = price["BB_lower"].values[0]
+            BB_middle = price["BB_middle"].values[0]
+            BB_upper = price["BB_upper"].values[0]
+            VWMA = price["VWMA"].values[0]
+            CCI = price["CCI"].values[0]
+            MACD = price["MACD"].values[0]
+            MACD_signal = price["MACD_signal"].values[0]
+        
+            # 添加基础行情描述
+            latest_market_intelligence_text += (
+                f"Prices: Open: ({open}), High: ({high}), Low: ({low}), Close: ({close}), "
+                f"Last Close: ({last_close}), Volume: ({volume}), PE_ratio: ({PE_ratio}), "
+                f"PE_ratio_ttm: ({PE_ratio_ttm}), PCF_ratio_ttm: ({PCF_ratio_ttm}), PB_ratio: ({PB_ratio}), "
+                f"PS_ratio: ({PS_ratio}), PS_ratio_ttm: ({PS_ratio_ttm})\n"
+            )
+
+            # 添加技术指标分析描述
+            technical_text = (
+                f"The latest RSI is {RSI:.2f}, indicating the asset is "
+                f"{'overbought' if RSI > 70 else 'oversold' if RSI < 30 else 'neutral'}. "
+                f"ADX is {ADX:.2f}, suggesting a {'strong' if ADX > 25 else 'weak'} trend. "
+                f"The price is {'above' if close > BB_upper else 'below' if close < BB_lower else 'within'} "
+                f"the Bollinger Bands (Upper: {BB_upper:.2f}, Middle: {BB_middle:.2f}, Lower: {BB_lower:.2f}). "
+                f"VWMA is {VWMA:.2f}, indicating volume-adjusted price momentum. "
+                f"CCI is {CCI:.2f}, suggesting {'an overbought signal' if CCI > 100 else 'an oversold signal' if CCI < -100 else 'neutral momentum'}. "
+                f"MACD is {MACD:.2f} and Signal Line is {MACD_signal:.2f}, showing a "
+                f"{'bullish' if MACD > MACD_signal else 'bearish'} crossover signal.\n"
+            )
+
+            latest_market_intelligence_text += technical_text
         else:
             latest_market_intelligence_text += f"Prices: Today is closed for trading.\n"
 
